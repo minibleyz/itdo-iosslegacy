@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Плейсхолдер: xcodegen перегенерирует этот файл целиком из properties в
+  project.yml (см. таргет ITDOLegacy) при каждом `xcodegen generate`.
+  Ручные правки сюда не сохраняются — правьте project.yml.
+-->
+<plist version="1.0">
+<dict>
+</dict>
+</plist>

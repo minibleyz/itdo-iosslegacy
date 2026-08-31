@@ -9,7 +9,7 @@ settings:
   base:
     SWIFT_VERSION: 5.0
     MARKETING_VERSION: 1.0.0
-    CURRENT_PROJECT_VERSION: 2
+    CURRENT_PROJECT_VERSION: 3
     TARGETED_DEVICE_FAMILY: "1,2"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
 
@@ -63,3 +63,52 @@ targets:
         # WebRTC: добавить через CocoaPods (pod install) или скачать фреймворк
         # и положить в папку ITDOApp/Frameworks/ перед билдом.
         # CallKit — системный фреймворк, линкуется автоматически при импорте.
+
+  ITDOLegacy:
+    # ВАЖНО (см. NOTES_LEGACY.md): xcodegen/актуальный Xcode физически не
+    # умеет линковать armv7 (32-bit) — эта опция вырезана начиная с Xcode 11.
+    # Чтобы получить настоящий 32-bit бинарник под iOS 9-11, эту схему нужно
+    # собирать в Xcode 9.x на macOS High Sierra/Mojave отдельно — здесь она
+    # лежит как источник, а не как гарантированно собираемый CI-таргет на
+    # современных машинах. На современном Xcode таргет соберётся как обычный
+    # 64-bit iOS 9.0-совместимый бинарник (без armv7-слайса).
+    type: application
+    platform: iOS
+    deploymentTarget: "9.0"
+    sources:
+      - path: ITDOLegacy
+      - path: ITDOApp/Networking/KeychainStore.swift
+      - path: ITDOApp/Networking/APIConfig.swift
+    info:
+      path: ITDOLegacy/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: ru
+        CFBundleDisplayName: ITDO Legacy
+        LSRequiresIPhoneOS: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIViewControllerBasedStatusBarAppearance: false
+        NSAppTransportSecurity:
+          NSExceptionDomains:
+            itdo.bleyzos.ru:
+              NSExceptionAllowsInsecureHTTPLoads: false
+              NSIncludesSubdomains: true
+        NSMicrophoneUsageDescription: "Нужен для записи голосовых сообщений"
+        NSPhotoLibraryUsageDescription: "Нужна для прикрепления фото к сообщениям и постам"
+        NSCameraUsageDescription: "Нужна для съёмки фото и видео"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ru.bleyzos.itdo.legacy
+        GENERATE_INFOPLIST_FILE: false
+        SWIFT_VERSION: 5.0
+        IPHONEOS_DEPLOYMENT_TARGET: "9.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_IDENTITY: ""
+        DEVELOPMENT_TEAM: ""
+        # ENABLE_BITCODE не указываем — Apple убрала bitcode из требований
+        # (Xcode 14+), но старым архивам он не помешает при необходимости.
