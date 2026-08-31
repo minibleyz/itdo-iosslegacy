@@ -1,57 +1,70 @@
-name: EXPERIMENT - macOS 10.13 + Xcode 10 (probably will just hang)
+name: EXPERIMENT - Xcode 10.1 manually installed on macos-14
 
-# Цель: чисто экспериментально проверить, существует ли ещё в пуле
-# GitHub-hosted раннеров образ с macOS 10.13 (High Sierra) и Xcode 10.
-# Ожидаемый результат: джоб зависнет в статусе "Waiting for a runner to
-# pick up this job" и в итоге будет отменён по таймауту, потому что
-# GitHub официально снял образы macos-10.13/macos-10.14 с производства
-# много лет назад. Если это всё же сработает — будет неожиданностью,
-# и тогда лог ниже покажет, что реально стоит на машине.
+# Цель: чисто экспериментально проверить, можно ли поставить и запустить
+# Xcode 10.1 на актуальном GitHub-hosted раннере macos-14, и если да —
+# способен ли его линкер собрать armv7/armv7s слайс.
+#
+# ПРЕДУПРЕЖДЕНИЕ ЗАРАНЕЕ: по опыту сообщества даже Xcode на 1 мажорную
+# версию старше системы (14.3.1 на Sonoma/14) блокируется версией-чекером
+# при обычном запуске — Apple явно не гарантирует и не тестирует такие
+# комбинации. Xcode 10 против macOS 14 — разрыв в 8+ версий. Ожидаемый
+# результат: Xcode либо не распакуется/не запустится вообще, либо
+# archive-шаг упадёт из-за отсутствующих/несовместимых системных
+# зависимостей. Но раз нужно проверить наверняка — вот способ.
+#
+# ТРЕБУЕТСЯ ПЕРЕД ЗАПУСКОМ:
+# 1. Скачать Xcode_10.1.xip вручную с developer.apple.com/download/all
+#    (нужен залогиненный Apple Developer аккаунт — анонимно Apple эту
+#    ссылку не отдаёт, поэтому curl из workflow её не возьмёт).
+# 2. Залить .xip как asset в GitHub Release этого репозитория
+#    (Releases -> Draft a new release -> прикрепить файл).
+# 3. Подставить прямую download-ссылку на этот asset в переменную
+#    XCODE_XIP_URL ниже.
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      xcode_xip_url:
+        description: 'Прямая download-ссылка на Xcode_10.1.xip (GitHub Release asset)'
+        required: true
+        type: string
 
 jobs:
   probe:
-    runs-on: macos-10.13
-    timeout-minutes: 5
+    runs-on: macos-14
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show OS and Xcode versions if we actually got a runner
+      - name: Show current OS/Xcode baseline
         run: |
-          echo "=== sw_vers ==="
-          sw_vers || true
-          echo "=== available Xcode installs ==="
-          ls -la /Applications | grep -i xcode || echo "нет ни одной Xcode.app в /Applications"
-          echo "=== xcodebuild -version (default) ==="
-          xcodebuild -version || true
-          echo "=== xcode-select -p ==="
-          xcode-select -p || true            echo "::error::NSFaceIDUsageDescription отсутствует в собранном Info.plist — код-пароль с Face ID будет крашить приложение на реальном устройстве"
-            exit 1
-          fi
-          echo "OK: NSFaceIDUsageDescription присутствует в собранном Info.plist"
+          sw_vers
+          echo "=== уже стоящие Xcode на образе ==="
+          ls -la /Applications | grep -i xcode || true
 
-      - name: Upload full build log (always, for debugging)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: xcodebuild-log
-          path: build/xcodebuild.log
-          retention-days: 7
-
-      - name: Package .ipa (unsigned)
+      - name: Download Xcode 10.1 xip
         run: |
-          mkdir -p build/Payload
-          cp -R "build/ITDOApp.xcarchive/Products/Applications/ITDOApp.app" build/Payload/
-          cd build
-          zip -r ITDOApp-unsigned.ipa Payload
-          cd ..
+          curl -fL "${{ inputs.xcode_xip_url }}" -o Xcode_10.1.xip
+          ls -la Xcode_10.1.xip
 
-      - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ITDOApp-unsigned-ipa
-          path: build/ITDOApp-unsigned.ipa
-          retention-days: 30
+      - name: Unxip Xcode 10.1
+        run: |
+          # unxip может занять долго и упасть, если формат/подпись
+          # архива несовместимы с текущими системными тулами
+          xip --expand Xcode_10.1.xip
+          ls -la
+
+      - name: Move to /Applications and try to launch (bypass version-check via direct binary)
+        run: |
+          sudo mv Xcode.app /Applications/Xcode_10.1.app
+          echo "=== Пытаемся запустить бинарник напрямую ==="
+          sudo xcode-select -s /Applications/Xcode_10.1.app
+          /Applications/Xcode_10.1.app/Contents/Developer/usr/bin/xcodebuild -version || \
+            echo "::warning::xcodebuild -version упал — Xcode 10.1, вероятно, не совместим с этой macOS"
+
+      - name: If it survived, check for armv7 support in the linker
+        run: |
+          /Applications/Xcode_10.1.app/Contents/Developer/usr/bin/xcodebuild -showsdks || true
+          echo "=== Ищем armv7 в списке поддерживаемых архитектур ld ==="
+          /Applications/Xcode_10.1.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -v 2>&1 | grep -i arm || true
